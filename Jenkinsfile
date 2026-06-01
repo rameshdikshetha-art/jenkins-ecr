@@ -2,16 +2,16 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_USERNAME = 'your-dockerhub-username'
-        IMAGE_NAME   = 'facebook-application'
-        IMAGE_TAG    = "${BUILD_NUMBER}"
-        IMAGE_URI    = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-        DOCKER_CREDS = 'dockerhub-creds'   // Jenkins credentials ID
+        AWS_REGION = 'us-east-1'
+        ECR_REPO   = 'facebook-application'
+        ACCOUNT_ID = '848004113365'
+        IMAGE_TAG  = "${BUILD_NUMBER}"
+        IMAGE_URI  = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
     }
 
     stages {
 
-        // ✅ Clean workspace
+        // ✅ Clean workspace (prevents issues from previous builds)
         stage('Clean Workspace') {
             steps {
                 cleanWs()
@@ -20,8 +20,8 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git branch: 'develop',
-                    url: 'https://github.com/rameshdikshetha-art/Jenkins-developers-deployment.git'
+                git branch: 'develop',   // ✅ FIX: match your GitHub branch
+                    url: 'https://github.com/manju230/facebook-application.git'
             }
         }
 
@@ -36,17 +36,12 @@ pipeline {
             }
         }
 
-        stage('Login to Docker Hub') {
+        stage('Login to ECR') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: "${DOCKER_CREDS}",
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh '''
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                    '''
-                }
+                sh """
+                aws ecr get-login-password --region ${AWS_REGION} \
+                | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                """
             }
         }
 
@@ -58,7 +53,7 @@ pipeline {
             }
         }
 
-        stage('Push to Docker Hub') {
+        stage('Push to ECR') {
             steps {
                 sh """
                 docker push ${IMAGE_URI}
