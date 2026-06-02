@@ -2,72 +2,55 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = 'us-east-1'
-        ECR_REPO   = 'facebook-application'
-        ACCOUNT_ID = '848004113365'
-        IMAGE_TAG  = "${BUILD_NUMBER}"
-        IMAGE_URI  = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+        AWS_REGION = 'ap-south-1'
+        AWS_ACCOUNT_ID = '562931631663'
+        ECR_REPO = 'developers-jenkins-deployment'
+
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        IMAGE_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
     }
 
     stages {
 
-        // ✅ Clean workspace (prevents issues from previous builds)
-        stage('Clean Workspace') {
+        stage('Clone Repository') {
             steps {
-                cleanWs()
+                git branch: 'main',
+                url: 'https://github.com/rameshdikshetha-art/jenkins-ecr.git'
             }
         }
 
-        stage('Checkout') {
-            steps {
-                git branch: 'develop',   // ✅ FIX: match your GitHub branch
-                    url: 'https://github.com/manju230/facebook-application.git'
-            }
-        }
-
-        stage('Verify Files') {
+        stage('Build Docker Image') {
             steps {
                 sh '''
-                echo "Current directory:"
-                pwd
-                echo "Files in workspace:"
-                ls -l
+                docker build -t developers-jenkins-deployment:${BUILD_NUMBER} .
                 '''
             }
         }
 
         stage('Login to ECR') {
             steps {
-                sh """
-                aws ecr get-login-password --region ${AWS_REGION} \
-                | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                """
+                sh '''
+                aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 562931631663.dkr.ecr.ap-south-1.amazonaws.com
+                '''
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Tag Image') {
             steps {
-                sh """
-                docker build --no-cache -t ${IMAGE_URI} .
-                """
+                sh '''
+                docker tag developers-jenkins-deployment:${BUILD_NUMBER} ${IMAGE_URI}:${BUILD_NUMBER}
+                docker tag developers-jenkins-deployment:${BUILD_NUMBER} ${IMAGE_URI}:latest
+                '''
             }
         }
 
-        stage('Push to ECR') {
+        stage('Push Image to ECR') {
             steps {
-                sh """
-                docker push ${IMAGE_URI}
-                """
+                sh '''
+                docker push ${IMAGE_URI}:${BUILD_NUMBER}
+                docker push ${IMAGE_URI}:latest
+                '''
             }
-        }
-    }
-
-    post {
-        success {
-            echo "✅ Image pushed successfully: ${IMAGE_URI}"
-        }
-        failure {
-            echo "❌ Pipeline failed"
         }
     }
 }
